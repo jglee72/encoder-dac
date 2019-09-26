@@ -1,4 +1,4 @@
- import RPi.GPIO as GPIO
+import RPi.GPIO as GPIO
 import time
 import Adafruit_MCP4725
 
@@ -11,13 +11,16 @@ DEBUG = False
 # encoder.py
 # Author:  Jonathan Lee
 # Date:    2019-09-25
+# Repository:
+# https://github.com/jglee72/encoder-dac.git
 # Description: Read an incremental encoder into two digital inputs of an RPI
 #	Translte rotations from encoder to an analog output chip external to RPI
 # 	Use a momentary button (integral in encoder) to enable/dis-able functionality
 #	Pass enable/dis-able output to GSS API for its enabling functionality.
 #	When disabled, output 2.5V from the ADC; Ignored by GSS API when disabled
 # Hardware: Use of Adafruit MCP4725 12-bit ADC
-# Drivers: Install Adafruit_MCP4725 driver based on 
+# Drivers: Install Adafruit_MCP4725 driver based on Adafruits archived
+#	repository at https://github.com/adafruit/Adafruit_Python_MCP4725.git
 #
 ###########################################################################
 
@@ -35,6 +38,7 @@ class encoder (object):
 		self.rotation = 2040
 		self.encoder_enabled = False
 		self.rot_delta = 10
+
 		# Use callbacks to enable GPIO interrupts.
 		# https://medium.com/@rxseger/interrupt-driven-i-o-on-raspberry-pi-3-with
 		# -leds-and-pushbuttons-rising-falling-edge-detection-36c14e640fef
@@ -42,6 +46,8 @@ class encoder (object):
 		GPIO.add_event_detect(self.input_pb,GPIO.FALLING, self.enable_encoder, self.btn_bouncetime)
 
 	def read_encoder(self,pin):
+		''' Simple function to return rpi gpio pin
+		'''
 		return GPIO.input(pin)
 
 	def setup_io(self):
@@ -57,6 +63,8 @@ class encoder (object):
 
 
 	def enable_encoder(self, pin):
+		''' This function will toggle the encoder enable status when called
+		'''
 		if DEBUG:
 			print("toggled pin",pin)
 			print("en1",self.encoder_enabled)
@@ -67,6 +75,8 @@ class encoder (object):
 			print("en2",self.encoder_enabled)
 
 	def encoder_interrupt(self,pin):
+		''' Interrupt function called on pin A (clk) changes
+		'''
 		if DEBUG:
 			print ("up/down/ENABLE",pin, self.encoder_enabled)
 		if self.encoder_enabled == False:
@@ -88,18 +98,19 @@ def main():
 	encoder_1_a = 5
 	encoder_1_b = 6
 	encoder_1_pb = 13
-	
+
 	# DAC 1 hardware address
 	dac_1_address = 0x62
 	# RPI I2C may always be bus 1
 	bus_num = 1
-	
+
 	trim_encoder_1  = encoder(encoder_1_a, encoder_1_b, encoder_1_pb)
 	dac1 = Adafruit_MCP4725.MCP4725(address=dac_1_address, busnum=bus_num)
 	while(1):
 		dac1.set_voltage(trim_encoder_1.rotation)
 		# Delay required to set CPU useage to approx 3%
 		time.sleep(0.01)
+
 if __name__=='__main__':
 	main()
 
