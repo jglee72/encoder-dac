@@ -19,9 +19,14 @@ DEBUG = False
 #	Pass enable/dis-able output to GSS API for its enabling functionality.
 #	When disabled, output 2.5V from the ADC; Ignored by GSS API when disabled
 # Hardware: Use of Adafruit MCP4725 12-bit ADC
+#	Use a Bourns Mechanical or CUI Inc. optical quadrature (grey code)
+#	encoder.
 # Drivers: Install Adafruit_MCP4725 driver based on Adafruits archived
 #	repository at https://github.com/adafruit/Adafruit_Python_MCP4725.git
 #
+#
+# 2019-09-27 - JGL
+#	- Remove ADC self check; done in ADC Class 
 ###########################################################################
 
 class encoder (object):
@@ -83,13 +88,13 @@ class encoder (object):
 			if DEBUG:
 				print("encoder disabled...push button to enable")
 			return
-		# Limit ouput of ADC to 0 and 5V (4096 count)
+		# Limit detection taken car or in ADC class (0-4095 count)
 		if (self.read_encoder(self.input_b) == 1):
 			self.rotation += self.rot_delta
-			if self.rotation > 4096: self.rotation=4096
+#			if self.rotation > 4096: self.rotation=4096
 		else:
 			self.rotation -= self.rot_delta
-			if self.rotation < 0: self.rotation=0
+#			if self.rotation < 0: self.rotation=0
 		print ("rotation = ",self.rotation)
 
 def main():
