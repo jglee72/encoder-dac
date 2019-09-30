@@ -12,7 +12,7 @@ Installation.
 ## Rotary Encoder
 - Mechanical or Optical Quadrature (grey-code) encoders can be used.
 - Optional push button is monitored via any available pins
-- 
+- if a seperate button is used make sure pin is defined in file
 
 
 # MCP4725 DAC Drivers
@@ -23,9 +23,17 @@ In the attempts to become "simpler" it seems to have become very complex to get 
 up and running using Circuit Python.  
 
 ## To install the library from source (recommended) run the following commands on a Raspberry Pi or other Debian-based OS system:
-
+### This is from archive directory:
     sudo apt-get install git build-essential python-dev
     cd ~
     git clone https://github.com/adafruit/Adafruit_Python_MCP4725.git
     cd Adafruit_Python_MCP4725
     sudo python setup.py install
+
+### This is how I setup a new RPi 4:
+    cd /home/pi
+    git clone https://github.com/jglee72/encoder-dac.git
+    cd Adafruit_Python_MCP4725
+    sudo python setup.py install
+    cd ..
+    python endcoder.py
