@@ -24,6 +24,9 @@
 #	- Attempt command line options for seperate BCM pin definition
 #	- Add list of BCM Pins, and method for checking validity
 #
+# 2019-10-02 - JGL
+#	- Add new argument categories: {encoder resolution, encoder delays,
+#	encoder bouncetime, button bouncetime}
 #
 ###########################################################################
 import RPi.GPIO as GPIO
@@ -41,16 +44,18 @@ class encoder (object):
 	''' Class for encdoder functions.  Expansion for multiple rotary encoders
 		Addressed by i/o pin definition.
 	'''
-	def __init__(self, ip_a, ip_b, ip_pb):
+	def __init__(self, ip_a=5, ip_b=6, ip_pb=13,enc_bounce=30,btn_bounce=300,enc_resolution=10):
 		self.input_a = ip_a
 		self.input_b = ip_b
 		self.input_pb = ip_pb
-		self.setup_io()
-		self.enc_bouncetime = 30
-		self.btn_bouncetime = 300
-		self.rotation = 2040
+		self.enc_bouncetime = enc_bounce
+		self.btn_bouncetime = btn_bounce
+		self.rotation = 2048
 		self.encoder_enabled = False
-		self.rot_delta = 10
+		self.enc_res = enc_resolution
+
+		#Setup the IO
+		self.setup_io()
 
 		# Use callbacks to enable GPIO interrupts.
 		# https://medium.com/@rxseger/interrupt-driven-i-o-on-raspberry-pi-3-with
@@ -68,6 +73,8 @@ class encoder (object):
 		'''
 		if DEBUG:
 			print("setting up IO...")
+			print("Encoder inputs A, B, Pushbutton:",self.input_a, self.input_b, self.input_pb)
+			print("Resolution, encoder debounce, button debounce:", self.enc_res, self.enc_bouncetime, self.btn_bouncetime)
 		# BCM Mode uses Broadcom based definitions; not header pin numbering
 		GPIO.setmode(GPIO.BCM)
 		GPIO.setup(self.input_a, GPIO.IN)
@@ -97,25 +104,73 @@ class encoder (object):
 			return
 		# Limit detection taken care of in ADC class (0-4095 count)
 		if (self.read_encoder(self.input_b) == 1):
-			self.rotation += self.rot_delta
+			self.rotation += self.enc_res
 		else:
-			self.rotation -= self.rot_delta
+			self.rotation -= self.enc_res
 		if DEBUG:
 			print ("rotation = ", self.rotation)
 
 def check_input(args):
+	''' Encoder require 3 inputs on the RPI, Check they are valid
+	'''
+	# Check for no arguments; quantity check done inline
+	if DEBUG:
+		print("Checking inputs inline argumnets: ", args)
+	if args == None:
+		if DEBUG:
+			print(" Too many input arguments or None")
+		return False
 	# convert args to integers to test against a large integer set
 	l_inputs = []
 	for i in range(len(args)):
 		l_inputs.append(int(args[i]))
 	s_inputs = set(l_inputs)
-	# check against RPI pins 
+	# check against RPI pins
 	if s_inputs <= RPI_INPUT:
 		if DEBUG:
 			print("yes", set(args), RPI_INPUT,l_inputs,s_inputs)
 		return True
-	print("no input or not valid")
+	print("Input pins not valid")
 	return False
+
+def check_resolution(args):
+	''' Encdoer resolution check.
+	'''
+	# Check for no arguments
+	if DEBUG:
+		print("Checking resolution inline argumnets: ", args)
+	if (args == None or int(args) < 0 or int(args) >200):
+		if DEBUG:
+			print ("Resolution out of range (0-200), or None")
+		return False
+	else:
+		return True
+
+def check_button_bounce(args):
+	''' Button Bouncetime check
+	'''
+	# Check for no arguments
+	if DEBUG:
+		print("Checking button bounce inline argumnets: ", args)
+	if (args == None or int(args) < 0 or int(args) >1000):
+		if DEBUG:
+			print ("Button Bounce out or range (0-1000), or None")
+		return False
+	else:
+		return True
+
+def check_encoder_bounce(args):
+	''' Encoder bouncetime check
+	'''
+	# Check for no arguments
+	if DEBUG:
+		print("Checking encoder bounce inline argumnets: ", args)
+	if (args == None or int(args) < 0 or int(args) >100):
+		if DEBUG:
+			print ("Button Bounce out or range (0-100), or None")
+		return False
+	else:
+		return True
 
 def main():
 	# Need global reference to change global constant
@@ -125,8 +180,15 @@ def main():
 	ap.add_argument("-d", "--debug", action='store_true', required=False,
 		help="Output inline debug comments")
 	ap.add_argument("-i", "--input", nargs = 3, required=False,
-		help="change main encoder pins A B and PB associated RPI pins (BCM numbering)")
+		help="change main encoder pins A B and PB associated RPI pins (BCM numbering), eg -i 5 6 13. Expects 3 arguments ")
+	ap.add_argument("-r", "--resolution", required=False,
+		help="Resolution of main encoder (range 0-200). Resolution/4096 x 5V (Default 10= [12mV/enc detent])")
+	ap.add_argument("-b", "--button", required=False,
+		help="Button Bouncetime in mS (range 0-1000). Ignores noise and button bounce (default: 300)")
+	ap.add_argument("-e", "--encoder", required=False,
+		help="Encoder Bouncetime in mS (range 0-100). Ignores noise and encoder errors (default: 30)")
 	args = vars(ap.parse_args())
+
 	if (args["debug"]==True):
 		DEBUG=True
 		print ("DEBUG Enabled...", DEBUG)
@@ -135,10 +197,10 @@ def main():
 		print ("sys.argv: argument list:", str(sys.argv))
 
 	# raspberry pi/project functionality to GPIO numbers (not pin numbers)
+
 	# Encoder 1 (main encoder) hardware pinout
-	# has no len if empty...so what to trigger on?
 	if DEBUG:
-		print("args", args)
+		print("args:", args)
 	if (check_input(args["input"]) == True):
 		# do thses need int(args[n])?
 		encoder_1_a = int(args["input"][0])
@@ -150,12 +212,34 @@ def main():
 		encoder_1_b = 6
 		encoder_1_pb = 13
 
+	# Encoder 1 (main encoder) resolution settings
+	if (check_resolution(args["resolution"])== True):
+		encoder_1_res = int(args["resolution"])
+	else:
+		print("...using default resolution")
+		encoder_1_res = 10;
+
+	# Encoder 1 (main encoder) bounce settings
+	if (check_encoder_bounce(args["encoder"])== True):
+		encoder_1_res = int(args["encoder"])
+	else:
+		print("...using default encoder bouncetime")
+		encoder_1_bounce = 30;
+
+	# Button 1 (usually main encoder) bounce settings
+	if (check_button_bounce(args["button"])== True):
+		button_1_bounce = int(args["button"])
+	else:
+		print("...using default button bouncetime")
+		button_1_bounce = 300;
+
 	# DAC 1 hardware address
 	dac_1_address = 0x62
 	# RPI I2C may always be bus 1
 	bus_num = 1
 
-	trim_encoder_1  = encoder(encoder_1_a, encoder_1_b, encoder_1_pb)
+	trim_encoder_1  = encoder(encoder_1_a, encoder_1_b, encoder_1_pb, enc_bounce=encoder_1_bounce, 
+		btn_bounce=button_1_bounce, enc_resolution=encoder_1_res)
 	dac1 = Adafruit_MCP4725.MCP4725(address=dac_1_address, busnum=bus_num)
 
 
@@ -166,6 +250,3 @@ def main():
 
 if __name__=='__main__':
 	main()
-
-
-
