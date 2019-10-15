@@ -27,6 +27,11 @@
 # 2019-10-02 - JGL
 #	- Add new argument categories: {encoder resolution, encoder delays,
 #	encoder bouncetime, button bouncetime}
+#	- Add new output for a)triggering enable on micro computer and
+#	b) to light an LED; add argument to change output pin 
+#	- add try/exception for KeyBoardInterrupt to GPIO.cleanup() the io pins
+# 2019-10-03 - JGL
+#	- Set Led Default out to False (LO), clear false True (HI) on power up
 #
 ###########################################################################
 import RPi.GPIO as GPIO
@@ -53,7 +58,8 @@ class encoder (object):
 		self.rotation = 2048
 		self.encoder_enabled = False
 		self.enc_res = enc_resolution
-
+		# todo: add default and x from inline argument
+		self.output_led = 18
 		#Setup the IO
 		self.setup_io()
 
@@ -80,9 +86,12 @@ class encoder (object):
 		GPIO.setup(self.input_a, GPIO.IN)
 		GPIO.setup(self.input_b, GPIO.IN)
 		GPIO.setup(self.input_pb, GPIO.IN)
+		GPIO.setup(self.output_led, GPIO.OUT)
+		GPIO.output(self.output_led, False)
 
 	def enable_encoder(self, pin):
 		''' This function will toggle the encoder enable status when called
+			and change output led, and/or send output to other micro-controller
 		'''
 		if DEBUG:
 			print("toggled pin",pin)
@@ -92,6 +101,10 @@ class encoder (object):
 		self.encoder_enabled = not(self.encoder_enabled)
 		if DEBUG:
 			print("en2",self.encoder_enabled)
+		if self.encoder_enabled == True:
+			GPIO.output(self.output_led, True)
+		else:
+			GPIO.output(self.output_led, False)
 
 	def encoder_interrupt(self,pin):
 		''' Interrupt function called on pin A (clk) changes
@@ -242,11 +255,14 @@ def main():
 		btn_bounce=button_1_bounce, enc_resolution=encoder_1_res)
 	dac1 = Adafruit_MCP4725.MCP4725(address=dac_1_address, busnum=bus_num)
 
-
-	while(1):
-		dac1.set_voltage(trim_encoder_1.rotation)
-		# Delay required to set CPU useage to approx 3%
-		time.sleep(0.01)
+	try:
+		while(1):
+			dac1.set_voltage(trim_encoder_1.rotation)
+			# Delay required to set CPU useage to approx 3%
+			time.sleep(0.01)
+	except KeyboardInterrupt:
+		print("end it!")
+		GPIO.cleanup()
 
 if __name__=='__main__':
 	main()
