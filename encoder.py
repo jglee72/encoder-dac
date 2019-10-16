@@ -33,6 +33,10 @@
 # 2019-10-03 - JGL
 #	- Set Led Default out to False (LO), clear false True (HI) on power up
 #
+# 2019-10-16 - JGL
+#	- Add new argument categories: {encoder_led, encoder_en}
+#	- Add new OP encoder_en; parallel to encoder_led for triggering GSS code
+#
 ###########################################################################
 import RPi.GPIO as GPIO
 import time
@@ -49,7 +53,7 @@ class encoder (object):
 	''' Class for encdoder functions.  Expansion for multiple rotary encoders
 		Addressed by i/o pin definition.
 	'''
-	def __init__(self, ip_a=5, ip_b=6, ip_pb=13,enc_bounce=30,btn_bounce=300,enc_resolution=10):
+	def __init__(self, ip_a=5, ip_b=6, ip_pb=23, op_led=18, op_en=17 ,enc_bounce=30,btn_bounce=300,enc_resolution=10):
 		self.input_a = ip_a
 		self.input_b = ip_b
 		self.input_pb = ip_pb
@@ -58,8 +62,8 @@ class encoder (object):
 		self.rotation = 2048
 		self.encoder_enabled = False
 		self.enc_res = enc_resolution
-		# todo: add default and x from inline argument
-		self.output_led = 18
+		self.output_led = op_led
+		self.output_en = op_en
 		#Setup the IO
 		self.setup_io()
 
@@ -88,6 +92,8 @@ class encoder (object):
 		GPIO.setup(self.input_pb, GPIO.IN)
 		GPIO.setup(self.output_led, GPIO.OUT)
 		GPIO.output(self.output_led, False)
+		GPIO.setup(self.output_en, GPIO.OUT)
+		GPIO.output(self.output_en, False)
 
 	def enable_encoder(self, pin):
 		''' This function will toggle the encoder enable status when called
@@ -103,8 +109,10 @@ class encoder (object):
 			print("en2",self.encoder_enabled)
 		if self.encoder_enabled == True:
 			GPIO.output(self.output_led, True)
+			GPIO.output(self.output_en, True)
 		else:
 			GPIO.output(self.output_led, False)
+			GPIO.output(self.output_en, False)
 
 	def encoder_interrupt(self,pin):
 		''' Interrupt function called on pin A (clk) changes
@@ -194,6 +202,8 @@ def main():
 		help="Output inline debug comments")
 	ap.add_argument("-i", "--input", nargs = 3, required=False,
 		help="change main encoder pins A B and PB associated RPI pins (BCM numbering), eg -i 5 6 13. Expects 3 arguments ")
+	ap.add_argument("-o", "--output", nargs = 2, required=False,
+		help="change main encoder pins LED and EN  associated RPI pins (BCM numbering), eg -o 18 17. Expects 2 arguments ")
 	ap.add_argument("-r", "--resolution", required=False,
 		help="Resolution of main encoder (range 0-200). Resolution/4096 x 5V (Default 10= [12mV/enc detent])")
 	ap.add_argument("-b", "--button", required=False,
@@ -223,7 +233,14 @@ def main():
 		print("..using default i/o pins")
 		encoder_1_a = 5
 		encoder_1_b = 6
-		encoder_1_pb = 13
+		encoder_1_pb = 23
+	if (check_input(args["output"]) == True):
+		encoder_1_led = int(args["output"][0])
+		encoder_1_en = int(args["output"][1])
+	else:
+		print("..using default i/o pins")
+		encoder_1_led = 18
+		encoder_1_en = 17
 
 	# Encoder 1 (main encoder) resolution settings
 	if (check_resolution(args["resolution"])== True):
@@ -251,7 +268,8 @@ def main():
 	# RPI I2C may always be bus 1
 	bus_num = 1
 
-	trim_encoder_1  = encoder(encoder_1_a, encoder_1_b, encoder_1_pb, enc_bounce=encoder_1_bounce, 
+	trim_encoder_1  = encoder(encoder_1_a, encoder_1_b, encoder_1_pb,
+		encoder_1_led, encoder_1_en, enc_bounce=encoder_1_bounce,
 		btn_bounce=button_1_bounce, enc_resolution=encoder_1_res)
 	dac1 = Adafruit_MCP4725.MCP4725(address=dac_1_address, busnum=bus_num)
 
