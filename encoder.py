@@ -36,7 +36,10 @@
 # 2019-10-16 - JGL
 #	- Add new argument categories: {encoder_led, encoder_en}
 #	- Add new OP encoder_en; parallel to encoder_led for triggering GSS code
-#
+#	- Add different encoding for Optical Encoders which are different than
+#		Mechanical encoders; 
+#	- Add new argument for setting MECH_ENC with -m
+# 
 ###########################################################################
 import RPi.GPIO as GPIO
 import time
@@ -46,6 +49,7 @@ import sys
 import argparse
 # Globals
 DEBUG = False
+MECH_ENC = False
 RPI_INPUT = set([0,1,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,
 	22,23,24,25,26,27])
 
@@ -53,7 +57,7 @@ class encoder (object):
 	''' Class for encdoder functions.  Expansion for multiple rotary encoders
 		Addressed by i/o pin definition.
 	'''
-	def __init__(self, ip_a=5, ip_b=6, ip_pb=23, op_led=18, op_en=17 ,enc_bounce=30,btn_bounce=300,enc_resolution=10):
+	def __init__(self, ip_a=5, ip_b=6, ip_pb=23, op_led=17, op_en=18 ,enc_bounce=30,btn_bounce=300,enc_resolution=10):
 		self.input_a = ip_a
 		self.input_b = ip_b
 		self.input_pb = ip_pb
@@ -70,9 +74,17 @@ class encoder (object):
 		# Use callbacks to enable GPIO interrupts.
 		# https://medium.com/@rxseger/interrupt-driven-i-o-on-raspberry-pi-3-with
 		# -leds-and-pushbuttons-rising-falling-edge-detection-36c14e640fef
-		GPIO.add_event_detect(self.input_a,GPIO.FALLING, self.encoder_interrupt, self.enc_bouncetime)
-		GPIO.add_event_detect(self.input_pb,GPIO.FALLING, self.enable_encoder, self.btn_bouncetime)
-
+		# Note: Mechanical and Optical Encoders output differently:
+		#	- Optical outputs are steady state - i.e. stay HI or LO until next indent
+		#		It takes 4 indent clicks to go through cycle as stated in datasheet
+		#	- Mechanical outputs momentary waveforms - i.e. always returns to LO
+		if MECH_ENC:
+			GPIO.add_event_detect(self.input_a,GPIO.FALLING, self.encoder_interrupt, self.enc_bouncetime)
+			GPIO.add_event_detect(self.input_pb,GPIO.FALLING, self.enable_encoder, self.btn_bouncetime)
+		else:
+			GPIO.add_event_detect(self.input_a,GPIO.BOTH, self.encoder_interrupt, self.enc_bouncetime)
+			GPIO.add_event_detect(self.input_b,GPIO.BOTH, self.encoder_interrupt, self.enc_bouncetime)
+			GPIO.add_event_detect(self.input_pb,GPIO.FALLING, self.enable_encoder, self.btn_bouncetime)
 	def read_encoder(self,pin):
 		''' Simple function to return rpi gpio pin
 		'''
@@ -115,19 +127,33 @@ class encoder (object):
 			GPIO.output(self.output_en, False)
 
 	def encoder_interrupt(self,pin):
-		''' Interrupt function called on pin A (clk) changes
+		''' Interrupt function called on 'pin' changes; see above for criteria
 		'''
 		if DEBUG:
-			print ("up/down/ENABLE",pin, self.encoder_enabled)
+			print ("up/down/ENABLE pin/enabled?:",pin, self.encoder_enabled)
 		if self.encoder_enabled == False:
 			if DEBUG:
 				print("encoder disabled...push button to enable")
 			return
-		# Limit detection taken care of in ADC class (0-4095 count)
-		if (self.read_encoder(self.input_b) == 1):
-			self.rotation += self.enc_res
+		if MECH_ENC:
+			# Limit detection taken care of in ADC class (0-4095 count)
+			if (self.read_encoder(self.input_b) == 1):
+				self.rotation += self.enc_res
+			else:
+				self.rotation -= self.enc_res
 		else:
-			self.rotation -= self.enc_res
+			# A has triggered interrupt
+			if pin==5:
+				if (self.read_encoder(self.input_a) == self.read_encoder(self.input_b)):
+					self.rotation -= self.enc_res
+				else:
+					self.rotation += self.enc_res
+			# B has triggered interrupt
+			if pin==6:
+				if (self.read_encoder(self.input_a) == self.read_encoder(self.input_b)):
+					self.rotation += self.enc_res
+				else:
+					self.rotation -= self.enc_res
 		if DEBUG:
 			print ("rotation = ", self.rotation)
 
@@ -196,6 +222,7 @@ def check_encoder_bounce(args):
 def main():
 	# Need global reference to change global constant
 	global DEBUG
+	global MECH_ENC
 	# Contruct the argument parser and parse the arguments
 	ap = argparse.ArgumentParser(description='Take incremental encoders to output analog voltage via ADC')
 	ap.add_argument("-d", "--debug", action='store_true', required=False,
@@ -210,6 +237,8 @@ def main():
 		help="Button Bouncetime in mS (range 0-1000). Ignores noise and button bounce (default: 300)")
 	ap.add_argument("-e", "--encoder", required=False,
 		help="Encoder Bouncetime in mS (range 0-100). Ignores noise and encoder errors (default: 30)")
+	ap.add_argument("-m", "--mech", action='store_true', required=False,
+		help="Encoder Type, use -m for a mechanical encoder (default: optical encoder)")
 	args = vars(ap.parse_args())
 
 	if (args["debug"]==True):
@@ -218,6 +247,10 @@ def main():
 		print ("Argparse arguments:", args)
 		print ("sys.argv: number of arguments:", len(sys.argv))
 		print ("sys.argv: argument list:", str(sys.argv))
+
+	if (args["mech"]==True):
+		MECH_ENC=True
+		print ("MECHANICAL ENCODER is Enabled...", MECH_ENC)
 
 	# raspberry pi/project functionality to GPIO numbers (not pin numbers)
 
@@ -239,8 +272,8 @@ def main():
 		encoder_1_en = int(args["output"][1])
 	else:
 		print("..using default i/o pins")
-		encoder_1_led = 18
-		encoder_1_en = 17
+		encoder_1_led = 17
+		encoder_1_en = 18
 
 	# Encoder 1 (main encoder) resolution settings
 	if (check_resolution(args["resolution"])== True):
@@ -251,7 +284,7 @@ def main():
 
 	# Encoder 1 (main encoder) bounce settings
 	if (check_encoder_bounce(args["encoder"])== True):
-		encoder_1_res = int(args["encoder"])
+		encoder_1_bounce = int(args["encoder"])
 	else:
 		print("...using default encoder bouncetime")
 		encoder_1_bounce = 30;
