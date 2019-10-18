@@ -40,6 +40,9 @@
 #		Mechanical encoders; 
 #	- Add new argument for setting MECH_ENC with -m
 # 
+# 2019-10-17 -JGL
+# - Changes made without hardware present:
+#	- Encoder Enable output requires posotive going pulse to GSS HW
 ###########################################################################
 import RPi.GPIO as GPIO
 import time
@@ -109,7 +112,7 @@ class encoder (object):
 
 	def enable_encoder(self, pin):
 		''' This function will toggle the encoder enable status when called
-			and change output led, and/or send output to other micro-controller
+			and change output led, and/or send output to other micro-controller. project specific: GSS HW/SW requires a pulse enable signal
 		'''
 		if DEBUG:
 			print("toggled pin",pin)
@@ -121,11 +124,20 @@ class encoder (object):
 			print("en2",self.encoder_enabled)
 		if self.encoder_enabled == True:
 			GPIO.output(self.output_led, True)
-			GPIO.output(self.output_en, True)
+			self.pulse_enable()
+#			GPIO.output(self.output_en, True)
 		else:
 			GPIO.output(self.output_led, False)
-			GPIO.output(self.output_en, False)
+#			GPIO.output(self.output_en, False)
+			self.pulse_enable()
 
+	def pulse_enable(self):
+		''' Project specific. Change here for different application requirements - i.e. toggle instead
+		'''
+			GPIO.output(self.output_en, True)
+			time.sleep(0.1)
+			GPIO.output(self.output_en, False)
+			
 	def encoder_interrupt(self,pin):
 		''' Interrupt function called on 'pin' changes; see above for criteria
 		'''
@@ -158,9 +170,9 @@ class encoder (object):
 			print ("rotation = ", self.rotation)
 
 def check_input(args):
-	''' Encoder require 3 inputs on the RPI, Check they are valid
+	''' Check for valid input numbers for RPI.
 	'''
-	# Check for no arguments; quantity check done inline
+	# Check for no arguments;
 	if DEBUG:
 		print("Checking inputs inline argumnets: ", args)
 	if args == None:
@@ -172,7 +184,7 @@ def check_input(args):
 	for i in range(len(args)):
 		l_inputs.append(int(args[i]))
 	s_inputs = set(l_inputs)
-	# check against RPI pins
+	# check against RPI pins via 'sets' math
 	if s_inputs <= RPI_INPUT:
 		if DEBUG:
 			print("yes", set(args), RPI_INPUT,l_inputs,s_inputs)
@@ -181,7 +193,7 @@ def check_input(args):
 	return False
 
 def check_resolution(args):
-	''' Encdoer resolution check.
+	''' Encdoer resolution arguments check.
 	'''
 	# Check for no arguments
 	if DEBUG:
@@ -194,7 +206,7 @@ def check_resolution(args):
 		return True
 
 def check_button_bounce(args):
-	''' Button Bouncetime check
+	''' Button Bouncetime arguments check
 	'''
 	# Check for no arguments
 	if DEBUG:
@@ -207,7 +219,7 @@ def check_button_bounce(args):
 		return True
 
 def check_encoder_bounce(args):
-	''' Encoder bouncetime check
+	''' Encoder bouncetime arguments check
 	'''
 	# Check for no arguments
 	if DEBUG:
