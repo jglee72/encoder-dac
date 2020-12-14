@@ -107,6 +107,11 @@ class encoder (object):
 		GPIO.setup(self.output_en, GPIO.OUT)
 		GPIO.output(self.output_en, False)
 
+	def pulse_trim_enable(self):
+		GPIO.output(self.output_en, True)
+		time.sleep(0.2)
+		GPIO.output(self.output_en, False)
+
 	def enable_encoder(self, pin):
 		''' This function will toggle the encoder enable status when called
 			and change output led, and/or send output to other micro-controller
@@ -121,10 +126,12 @@ class encoder (object):
 			print("en2",self.encoder_enabled)
 		if self.encoder_enabled == True:
 			GPIO.output(self.output_led, True)
-			GPIO.output(self.output_en, True)
+#			GPIO.output(self.output_en, True)
+			self.pulse_trim_enable()
 		else:
 			GPIO.output(self.output_led, False)
-			GPIO.output(self.output_en, False)
+#			GPIO.output(self.output_en, False)
+			self.pulse_trim_enable()
 
 	def encoder_interrupt(self,pin):
 		''' Interrupt function called on 'pin' changes; see above for criteria
